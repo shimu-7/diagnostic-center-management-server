@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 require('dotenv').config();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
 
@@ -39,6 +39,39 @@ async function run() {
         app.get('/upazila', async (req, res) => {
             const result = await upazilaCollection.find().toArray();
             res.send(result)
+        })
+
+        app.get('/users', async (req, res) => {
+
+            const result = await userCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.patch('/users/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    role: 'admin'
+                }
+            }
+            const result = await userCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+
+        })
+        app.patch('/users/status/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const user = await userCollection.find(filter).toArray();
+            console.log(user[0].status)
+            const updatedDoc = {
+                $set: {
+                    status: !user[0].status
+                }
+            }
+            const result = await userCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+
         })
 
 
