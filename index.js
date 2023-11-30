@@ -13,6 +13,7 @@ app.use(express.json());
 
 
 
+//const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.fd2onld.mongodb.net/?retryWrites=true&w=majority`;
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.fd2onld.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -27,12 +28,15 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+       //await client.connect();
 
         const userCollection = client.db("finalDB").collection("users");
         const testCollection = client.db("finalDB").collection("tests");
         const districtCollection = client.db("finalDB").collection("districts");
         const upazilaCollection = client.db("finalDB").collection("upazila");
+        const bannerCollection = client.db("finalDB").collection("banners");
+        const recommendationCollection = client.db("finalDB").collection("recommendations");
+        const reservationCollection = client.db("finalDB").collection("reservations");
 
 
 
@@ -46,7 +50,7 @@ async function run() {
 
         //middleware to verify token
         const verifyToken = (req, res, next) => {
-            console.log('get token form verifyToken', req.headers.authorization);
+            //console.log('get token form verifyToken', req.headers.authorization);
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: 'Unauthorized Access' })
             }
@@ -55,7 +59,7 @@ async function run() {
                 if (err) {
                     return res.status(401).send({ message: 'Unauthorized Access' })
                 }
-                console.log("token verified")
+                //console.log("token verified")
                 req.decoded = decoded;
                 next();
             })
@@ -75,7 +79,7 @@ async function run() {
 
 
         //checking whether admin or not
-        app.get('/users/admin/:email', verifyToken, async (req, res) => {
+        app.get('/users/admin/:email',  async (req, res) => {
             const email = req.params.email;
             console.log("admin checking from server")
             // if (email !== req.decoded.email) {
@@ -148,6 +152,34 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/users/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email: email }
+            const result = await userCollection.findOne(query)
+            res.send(result)
+        })
+
+        app.put('/users/:email', async (req, res) => {
+            const email = req.params.email;
+            const filter = { email: email }
+            const options = { upsert: true };
+            const user = req.body;
+            const updatedUser = {
+                $set: {
+                    name: user.name,
+                    email: user.email,
+                    image: user.image,
+                    district: user.district,
+                    upazila: user.upazila,
+                    blood: user.blood,
+                    status: user.status
+
+                }
+            }
+            const result = await userCollection.updateOne(filter, updatedUser, options);
+            res.send(result);
+        })
+
 
         //test related api 
         app.post('/tests', verifyToken, verifyAdmin, async (req, res) => {
@@ -160,15 +192,28 @@ async function run() {
             const result = await testCollection.find().toArray();
             res.send(result)
         })
+        app.patch('/tests/slot/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const test = await testCollection.find(filter).toArray();
+            const updatedDoc = {
+                $set: {
+                    slot: test[0].slot - 1
+                }
+            }
+            const result = await testCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+
+        })
 
         app.get('/tests/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await testCollection.findOne(query)
             res.send(result)
-          })
+        })
 
-        app.put('/tests/:id',verifyAdmin, async (req, res) => {
+        app.put('/tests/:id', async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true };
@@ -184,7 +229,7 @@ async function run() {
 
                 }
             }
-            const result = await testCollection.updateOne(filter, updatedJob, options);
+            const result = await testCollection.updateOne(filter, updatedTest, options);
             res.send(result);
         })
 
@@ -196,11 +241,85 @@ async function run() {
         })
 
 
+        //Banner related
+        app.post('/banners', verifyToken, verifyAdmin, async (req, res) => {
+            const item = req.body;
+            const result = await bannerCollection.insertOne(item);
+            res.send(result);
+        })
+        app.get('/banners', async (req, res) => {
+            const result = await bannerCollection.find().toArray();
+            res.send(result)
+        })
+
+        app.patch('/banners/status/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const banner = await bannerCollection.find(filter).toArray();
+            console.log(banner[0].isActive)
+            const updatedDoc = {
+                $set: {
+                    isActive: !banner[0].isActive
+                }
+            }
+            const result = await bannerCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+
+        })
+
+        //Reservation
+        app.post('/reservations', async (req, res) => {
+            const item = req.body;
+            const result = await reservationCollection.insertOne(item);
+            res.send(result);
+        })
+        app.get('/reservations', async (req, res) => {
+            const result = await reservationCollection.find().toArray()
+            res.send(result)
+        })
+        app.patch('/reservations/status/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    status: "delivered"
+                }
+            }
+            const result = await reservationCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+
+        })
+       
+        app.delete('/reservations/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await reservationCollection.deleteOne(query);
+            res.send(result);
+        })
+
+        app.get('/reservations/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email: email }
+            const result = await reservationCollection.find(query).toArray()
+            res.send(result)
+        })
+        app.delete('/reservations/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await reservationCollection.deleteOne(query);
+            res.send(result);
+        })
+
+        //recommendation related
+        app.get('/recommendations', async (req, res) => {
+            const result = await recommendationCollection.find().toArray();
+            res.send(result)
+        })
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         //await client.close();
